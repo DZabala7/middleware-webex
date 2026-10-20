@@ -3,8 +3,8 @@ import requests
 
 app = Flask(__name__)
 
-# 1. Pega aquí el Token real de tu Bot de Webex
-WEBEX_BOT_TOKEN = "TU_BOT_ACCESS_TOKEN_REAL"
+# 1. Token real de tu Bot de Webex
+WEBEX_BOT_TOKEN = "NTI2NGQ3ZTAtMjUxYS00MjA0LThlY2YtMDYwNTA4NGI0YTFmMjY2ZTk4OTItZDIz_PF84_73fcfd80-321c-49b4-9377-d25cd201dbf6"
 
 # 2. URL de Webhook de BMC HelixGPT
 BMC_URL = "https://portaltiarcor-is.onbmc.com/api/com.bmc.dsom.hgm/channels/AGGGYVF8D2202ATLVPT0TLVPT0JIG4/generic"
