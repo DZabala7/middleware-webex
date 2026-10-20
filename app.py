@@ -42,14 +42,28 @@ def webex_webhook():
     }
     
     headers_bmc = {"Content-Type": "application/json"}
-    
-    # Petición POST a BMC HelixGPT
-    res_bmc = requests.request("POST", BMC_URL, json=bmc_payload, headers=headers_bmc)
+    res_bmc = requests.post(BMC_URL, json=bmc_payload, headers=headers_bmc)
 
-    print(f"🚀 Respuesta de BMC HelixGPT: {res_bmc.status_code}")
+    print(f"🚀 Respuesta de BMC HelixGPT ({res_bmc.status_code}): {res_bmc.text}")
+
+    # Paso C: Enviar la respuesta de BMC de vuelta al chat de Cisco Webex
+    if res_bmc.status_code == 200:
+        try:
+            bmc_json = res_bmc.json()
+            # Extrae el texto de respuesta de BMC
+            respuesta_texto = bmc_json.get('text') or bmc_json.get('response') or bmc_json.get('reply') or res_bmc.text
+        except Exception:
+            respuesta_texto = res_bmc.text
+
+        payload_webex = {
+            "roomId": room_id,
+            "text": respuesta_texto
+        }
+
+        res_send = requests.post("https://webexapis.com/v1/messages", headers=headers_webex, json=payload_webex)
+        print(f"📤 Envío a Webex ({res_send.status_code}): {res_send.text}")
 
     return jsonify({"status": "ok"}), 200
 
 if __name__ == '__main__':
-    # Arranca el servidor Flask en el puerto 5000
     app.run(host='0.0.0.0', port=5000, debug=True)
