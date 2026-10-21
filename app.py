@@ -18,7 +18,7 @@ def inicializar_bot():
     global BOT_PERSON_ID, BOT_EMAIL
     try:
         res = requests.get(
-            "[suspicious link removed]",
+            "https://webexapis.com/v1/people/me",
             headers={"Authorization": f"Bearer {WEBEX_BOT_TOKEN}"},
             timeout=10
         )
