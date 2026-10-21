@@ -88,17 +88,14 @@ def webex_webhook():
 
     print(f"📩 Mensaje válido del usuario ({sender_email}): '{message_text}'")
 
-    # 4. Reenviar la consulta a BMC HelixGPT
+    # 4. Reenviar la consulta a BMC HelixGPT (Formato plano)
     bmc_payload = {
-        "event_type": "message",
-        "created": msg_json.get("created"),
-        "data": {
-            "id": message_id,
-            "roomId": room_id,
-            "personId": sender_person_id,
-            "personEmail": sender_email,
-            "text": message_text
-        }
+        "text": message_text,
+        "roomId": room_id,
+        "personId": sender_person_id,
+        "personEmail": sender_email,
+        "id": message_id,
+        "created": msg_json.get("created")
     }
     
     headers_bmc = {"Content-Type": "application/json"}
