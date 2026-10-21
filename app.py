@@ -105,7 +105,6 @@ def webex_webhook():
 
     return jsonify({"status": "forwarded_to_bmc"}), 200
 
-
 # ==========================================
 # ENDPOINT 2: SALIDA (Desde BMC hacia Webex)
 # ==========================================
@@ -115,32 +114,38 @@ def bmc_response():
     print("📩 Petición recibida de BMC HelixGPT:", payload)
 
     respuesta_texto = payload.get('text') or payload.get('message')
-    room_id = payload.get('roomId') or payload.get('conversationId') or payload.get('channelId')
+    destinatario = payload.get('roomId') or payload.get('conversationId') or payload.get('channelId') or payload.get('personEmail') or payload.get('fromEmail')
 
-    # Si la respuesta de BMC es un ACK de estado ("{"statusCode": 200}"), no enviarla a Webex
+    # Ignorar confirmaciones técnicas de estado de BMC
     if respuesta_texto:
         str_texto = str(respuesta_texto).strip()
         if 'statusCode' in str_texto or str_texto == '{"statusCode": 200}':
             print(f"⚠️ BMC envió una confirmación de estado ('{str_texto}'). No se publica en el chat.")
             return jsonify({"status": "ignored_status_ack"}), 200
 
-    if respuesta_texto and room_id:
+    if respuesta_texto and destinatario:
         headers_webex = {
             "Authorization": f"Bearer {WEBEX_BOT_TOKEN}",
             "Content-Type": "application/json"
         }
-        payload_webex = {
-            "roomId": room_id,
-            "text": respuesta_texto
-        }
         
+        payload_webex = {"text": respuesta_texto}
+        dest_str = str(destinatario)
+
+        # Mapeo dinámico según la API de Webex
+        if "@" in dest_str:
+            payload_webex["toPersonEmail"] = dest_str
+        elif "PEOPLE" in dest_str:
+            payload_webex["toPersonId"] = dest_str
+        else:
+            payload_webex["roomId"] = dest_str
+
         res_send = requests.post("https://webexapis.com/v1/messages", headers=headers_webex, json=payload_webex, timeout=10)
         print(f"📤 Mensaje del agente enviado a Webex ({res_send.status_code}): {res_send.text}")
     else:
-        print("⚠️ No se encontró 'text' o 'roomId' válido en el payload de BMC.")
+        print("⚠️ No se encontró 'text' o destinatario válido en el payload de BMC.")
 
     return jsonify({"status": "ok"}), 200
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
