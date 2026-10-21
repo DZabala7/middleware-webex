@@ -95,7 +95,8 @@ def webex_webhook():
         "personId": sender_person_id,
         "personEmail": sender_email,
         "id": message_id,
-        "created": msg_json.get("created")
+        "created": msg_json.get("created"),
+        "platform": "webex"
     }
     
     headers_bmc = {"Content-Type": "application/json"}
