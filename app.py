@@ -25,7 +25,7 @@ def inicializar_bot():
         if res.status_code == 200:
             datos = res.json()
             BOT_PERSON_ID = datos.get("id")
-            BOT_EMAIL = datos.get("emails", [None]) if datos.get("emails") else None
+            BOT_EMAIL = datos.get("emails")[0] if datos.get("emails") else None
             print(f"🤖 Bot Identificado con éxito -> ID: {BOT_PERSON_ID} | Email: {BOT_EMAIL}")
         else:
             print(f"⚠️ No se pudo obtener la identidad del Bot ({res.status_code}): {res.text}")
