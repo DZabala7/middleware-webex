@@ -1,13 +1,19 @@
+import os
 from flask import Flask, request, jsonify
 import requests
 
 app = Flask(__name__)
 
 # ==========================================
-# CONFIGURACIÓN DE CREDENCIALES Y ENDPOINTS
+# CONFIGURACIÓN DESDE VARIABLES DE ENTORNO
 # ==========================================
-WEBEX_BOT_TOKEN = "NTI2NGQ3ZTAtMjUxYS00MjA0LThlY2YtMDYwNTA4NGI0YTFmMjY2ZTk4OTItZDIz_PF84_73fcfd80-321c-49b4-9377-d25cd201dbf6"
-BMC_URL = "https://portaltiarcor-dev-is.onbmc.com/api/com.bmc.dsom.hgm/channels/AGGD3RELFXP86ATL5ET2TL5ET25NZ2/generic"
+WEBEX_BOT_TOKEN = os.environ.get("WEBEX_BOT_TOKEN")
+BMC_URL = os.environ.get("BMC_URL")
+
+if not WEBEX_BOT_TOKEN:
+    raise RuntimeError("Falta la variable de entorno WEBEX_BOT_TOKEN")
+if not BMC_URL:
+    raise RuntimeError("Falta la variable de entorno BMC_URL")
 
 # Identidad del Bot (se obtiene automáticamente al iniciar)
 BOT_PERSON_ID = None
@@ -26,13 +32,12 @@ def inicializar_bot():
             datos = res.json()
             BOT_PERSON_ID = datos.get("id")
             BOT_EMAIL = datos.get("emails")[0] if datos.get("emails") else None
-            print(f"🤖 Bot Identificado con éxito -> ID: {BOT_PERSON_ID} | Email: {BOT_EMAIL}")
+            print(f"🤖 Bot identificado con éxito -> ID: {BOT_PERSON_ID} | Email: {BOT_EMAIL}")
         else:
             print(f"⚠️ No se pudo obtener la identidad del Bot ({res.status_code}): {res.text}")
     except Exception as e:
         print(f"⚠️ Error al inicializar identidad del bot: {e}")
 
-# Ejecutar la consulta de identidad del Bot al arrancar
 inicializar_bot()
 
 
@@ -43,12 +48,12 @@ inicializar_bot()
 def webex_webhook():
     payload = request.get_json() or {}
     data = payload.get('data', {})
-    
+
     actor_id = payload.get('actorId')
     person_id = data.get('personId')
     person_email = data.get('personEmail', '')
 
-    # 1. Filtro Anti-Loop Primario (Verifica ID del Bot y Dominio @webex.bot)
+    # Filtro Anti-Loop Primario
     if (BOT_PERSON_ID and (actor_id == BOT_PERSON_ID or person_id == BOT_PERSON_ID)) or \
        (BOT_EMAIL and person_email == BOT_EMAIL) or \
        person_email.endswith(('@webex.bot', '@sparkbot.io')):
@@ -61,9 +66,12 @@ def webex_webhook():
     if not message_id:
         return jsonify({"status": "ignored_no_id"}), 200
 
-    # 2. Consultar el contenido del mensaje a la API de Webex
+    # Consultar el contenido real del mensaje
     headers_webex = {"Authorization": f"Bearer {WEBEX_BOT_TOKEN}"}
-    res_webex = requests.get(f"https://webexapis.com/v1/messages/{message_id}", headers=headers_webex, timeout=10)
+    res_webex = requests.get(
+        f"https://webexapis.com/v1/messages/{message_id}",
+        headers=headers_webex, timeout=10
+    )
 
     if res_webex.status_code != 200:
         print("❌ Error consultando el mensaje en Webex:", res_webex.text)
@@ -74,21 +82,20 @@ def webex_webhook():
     sender_email = msg_json.get('personEmail', person_email)
     sender_person_id = msg_json.get('personId')
 
-    # 3. Filtro Anti-Loop Secundario (Verifica remitente real del mensaje recuperado)
+    # Filtro Anti-Loop Secundario
     if (BOT_PERSON_ID and sender_person_id == BOT_PERSON_ID) or \
        (BOT_EMAIL and sender_email == BOT_EMAIL) or \
        sender_email.endswith(('@webex.bot', '@sparkbot.io')):
-        print("🤖 El mensaje recuperado de Webex fue enviado por el Bot. Ignorando.")
+        print("🤖 El mensaje recuperado fue enviado por el Bot. Ignorando.")
         return jsonify({"status": "ignored_bot_message"}), 200
 
-    # Ignorar mensajes de confirmación de estado o vacíos
     if '{"statusCode": 200}' in message_text or message_text.strip() == '':
         print(f"⚠️ Mensaje con formato de estado o vacío ignorado: '{message_text}'")
         return jsonify({"status": "ignored_invalid_text"}), 200
 
     print(f"📩 Mensaje válido del usuario ({sender_email}): '{message_text}'")
 
-    # 4. Reenviar la consulta a BMC HelixGPT (Formato plano)
+    # Reenviar a BMC HelixGPT
     bmc_payload = {
         "text": message_text,
         "roomId": room_id,
@@ -98,13 +105,14 @@ def webex_webhook():
         "created": msg_json.get("created"),
         "platform": "webex"
     }
-    
+
     headers_bmc = {"Content-Type": "application/json"}
     res_bmc = requests.post(BMC_URL, json=bmc_payload, headers=headers_bmc, timeout=10)
 
     print(f"🚀 Confirmación de recepción de BMC ({res_bmc.status_code}): {res_bmc.text}")
 
     return jsonify({"status": "forwarded_to_bmc"}), 200
+
 
 # ==========================================
 # ENDPOINT 2: SALIDA (Desde BMC hacia Webex)
@@ -117,7 +125,6 @@ def bmc_response():
     respuesta_texto = payload.get('text') or payload.get('message')
     destinatario = payload.get('roomId') or payload.get('conversationId') or payload.get('channelId') or payload.get('personEmail') or payload.get('fromEmail')
 
-    # Ignorar confirmaciones técnicas de estado de BMC
     if respuesta_texto:
         str_texto = str(respuesta_texto).strip()
         if 'statusCode' in str_texto or str_texto == '{"statusCode": 200}':
@@ -129,11 +136,10 @@ def bmc_response():
             "Authorization": f"Bearer {WEBEX_BOT_TOKEN}",
             "Content-Type": "application/json"
         }
-        
+
         payload_webex = {"text": respuesta_texto}
         dest_str = str(destinatario)
 
-        # Mapeo dinámico según la API de Webex
         if "@" in dest_str:
             payload_webex["toPersonEmail"] = dest_str
         elif "PEOPLE" in dest_str:
@@ -148,5 +154,7 @@ def bmc_response():
 
     return jsonify({"status": "ok"}), 200
 
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
